@@ -6,7 +6,37 @@ import {
   Max,
   IsBoolean,
   MinLength,
+  IsArray,
+  ValidateNested,
+  ArrayMaxSize,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class UpdateQuestionDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
+  @IsInt()
+  @Min(1)
+  order: number;
+
+  @IsString()
+  @MinLength(1)
+  answer: string;
+
+  @IsString()
+  @MinLength(1)
+  example: string;
+
+  @IsString()
+  @MinLength(1)
+  question: string;
+
+  @IsString()
+  @IsOptional()
+  hint?: string;
+}
 
 export class UpdateActivityDto {
   @IsString()
@@ -27,4 +57,11 @@ export class UpdateActivityDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateQuestionDto)
+  @ArrayMaxSize(50)
+  @IsOptional()
+  questions?: UpdateQuestionDto[];
 }

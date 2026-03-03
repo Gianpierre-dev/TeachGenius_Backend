@@ -120,19 +120,82 @@ export class ActivitiesService {
   async update(id: string, profesorId: string, dto: UpdateActivityDto) {
     await this.findById(id, profesorId);
 
-    const actividad = await this.prisma.actividad.update({
-      where: { id },
-      data: {
-        titulo: dto.title,
-        descripcion: dto.description,
-        tiempoLimite: dto.timeLimit,
-        activa: dto.isActive,
-      },
-      include: {
-        preguntas: {
-          orderBy: { orden: 'asc' },
+    // Usar transacción para actualizar actividad y preguntas
+    const actividad = await this.prisma.$transaction(async (tx) => {
+      // Actualizar datos básicos de la actividad
+      const actividadActualizada = await tx.actividad.update({
+        where: { id },
+        data: {
+          titulo: dto.title,
+          descripcion: dto.description,
+          tiempoLimite: dto.timeLimit,
+          activa: dto.isActive,
         },
-      },
+      });
+
+      // Si se enviaron preguntas, procesarlas
+      if (dto.questions && dto.questions.length > 0) {
+        // Obtener IDs de preguntas existentes
+        const preguntasExistentes = await tx.pregunta.findMany({
+          where: { actividadId: id },
+          select: { id: true },
+        });
+        const idsExistentes = new Set(preguntasExistentes.map((p) => p.id));
+
+        // IDs de preguntas que vienen en el DTO
+        const idsEnDto = new Set(
+          dto.questions.filter((q) => q.id).map((q) => q.id),
+        );
+
+        // Eliminar preguntas que ya no están en el DTO
+        const idsAEliminar = [...idsExistentes].filter(
+          (id) => !idsEnDto.has(id),
+        );
+        if (idsAEliminar.length > 0) {
+          await tx.pregunta.deleteMany({
+            where: { id: { in: idsAEliminar } },
+          });
+        }
+
+        // Actualizar o crear preguntas
+        for (const q of dto.questions) {
+          if (q.id && idsExistentes.has(q.id)) {
+            // Actualizar pregunta existente
+            await tx.pregunta.update({
+              where: { id: q.id },
+              data: {
+                orden: q.order,
+                respuesta: q.answer.toUpperCase(),
+                ejemplo: q.example,
+                pregunta: q.question,
+                pista: q.hint,
+              },
+            });
+          } else {
+            // Crear nueva pregunta
+            await tx.pregunta.create({
+              data: {
+                orden: q.order,
+                respuesta: q.answer.toUpperCase(),
+                ejemplo: q.example,
+                pregunta: q.question,
+                pista: q.hint,
+                actividadId: id,
+              },
+            });
+          }
+        }
+      }
+
+      // Retornar actividad con preguntas actualizadas
+      return tx.actividad.findUnique({
+        where: { id },
+        include: {
+          preguntas: {
+            orderBy: { orden: 'asc' },
+          },
+        },
+      });
     });
 
     return this.mapActivityToResponse(actividad);
