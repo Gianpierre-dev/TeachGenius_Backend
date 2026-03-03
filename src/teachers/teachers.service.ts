@@ -6,17 +6,29 @@ export class TeachersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string) {
-    return this.prisma.teacher.findUnique({
+    const profesor = await this.prisma.profesor.findUnique({
       where: { id },
       select: {
         id: true,
         email: true,
-        name: true,
-        createdAt: true,
+        nombre: true,
+        creadoEn: true,
         _count: {
-          select: { activities: true },
+          select: { actividades: true },
         },
       },
     });
+
+    if (!profesor) return null;
+
+    return {
+      id: profesor.id,
+      email: profesor.email,
+      name: profesor.nombre,
+      createdAt: profesor.creadoEn,
+      _count: {
+        activities: profesor._count.actividades,
+      },
+    };
   }
 }

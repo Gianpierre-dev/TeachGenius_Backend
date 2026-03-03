@@ -12,77 +12,101 @@ export class QuestionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private async validateActivityOwnership(
-    activityId: string,
-    teacherId: string,
+    actividadId: string,
+    profesorId: string,
   ) {
-    const activity = await this.prisma.activity.findUnique({
-      where: { id: activityId },
+    const actividad = await this.prisma.actividad.findUnique({
+      where: { id: actividadId },
     });
 
-    if (!activity) {
-      throw new NotFoundException('Activity not found');
+    if (!actividad) {
+      throw new NotFoundException('Actividad no encontrada');
     }
 
-    if (activity.teacherId !== teacherId) {
-      throw new ForbiddenException('Access denied');
+    if (actividad.profesorId !== profesorId) {
+      throw new ForbiddenException('Acceso denegado');
     }
 
-    return activity;
+    return actividad;
   }
 
-  async create(activityId: string, teacherId: string, dto: CreateQuestionDto) {
-    await this.validateActivityOwnership(activityId, teacherId);
+  async create(actividadId: string, profesorId: string, dto: CreateQuestionDto) {
+    await this.validateActivityOwnership(actividadId, profesorId);
 
-    return this.prisma.question.create({
+    const pregunta = await this.prisma.pregunta.create({
       data: {
-        ...dto,
-        answer: dto.answer.toUpperCase(),
-        activityId,
+        orden: dto.order,
+        respuesta: dto.answer.toUpperCase(),
+        ejemplo: dto.example,
+        pregunta: dto.question,
+        pista: dto.hint,
+        actividadId,
       },
     });
+
+    return {
+      id: pregunta.id,
+      order: pregunta.orden,
+      answer: pregunta.respuesta,
+      example: pregunta.ejemplo,
+      question: pregunta.pregunta,
+      hint: pregunta.pista,
+    };
   }
 
-  async update(id: string, teacherId: string, dto: UpdateQuestionDto) {
-    const question = await this.prisma.question.findUnique({
+  async update(id: string, profesorId: string, dto: UpdateQuestionDto) {
+    const pregunta = await this.prisma.pregunta.findUnique({
       where: { id },
-      include: { activity: true },
+      include: { actividad: true },
     });
 
-    if (!question) {
-      throw new NotFoundException('Question not found');
+    if (!pregunta) {
+      throw new NotFoundException('Pregunta no encontrada');
     }
 
-    if (question.activity.teacherId !== teacherId) {
-      throw new ForbiddenException('Access denied');
+    if (pregunta.actividad.profesorId !== profesorId) {
+      throw new ForbiddenException('Acceso denegado');
     }
 
-    return this.prisma.question.update({
+    const actualizada = await this.prisma.pregunta.update({
       where: { id },
       data: {
-        ...dto,
-        answer: dto.answer ? dto.answer.toUpperCase() : undefined,
+        orden: dto.order,
+        respuesta: dto.answer ? dto.answer.toUpperCase() : undefined,
+        ejemplo: dto.example,
+        pregunta: dto.question,
+        pista: dto.hint,
       },
     });
+
+    return {
+      id: actualizada.id,
+      order: actualizada.orden,
+      answer: actualizada.respuesta,
+      example: actualizada.ejemplo,
+      question: actualizada.pregunta,
+      hint: actualizada.pista,
+    };
   }
 
-  async delete(id: string, teacherId: string) {
-    const question = await this.prisma.question.findUnique({
+  async delete(id: string, profesorId: string) {
+    const pregunta = await this.prisma.pregunta.findUnique({
       where: { id },
-      include: { activity: true },
+      include: { actividad: true },
     });
 
-    if (!question) {
-      throw new NotFoundException('Question not found');
+    if (!pregunta) {
+      throw new NotFoundException('Pregunta no encontrada');
     }
 
-    if (question.activity.teacherId !== teacherId) {
-      throw new ForbiddenException('Access denied');
+    if (pregunta.actividad.profesorId !== profesorId) {
+      throw new ForbiddenException('Acceso denegado');
     }
 
-    await this.prisma.question.delete({
+    await this.prisma.pregunta.delete({
       where: { id },
     });
 
-    return { message: 'Question deleted successfully' };
+    return { message: 'Pregunta eliminada correctamente' };
   }
 }

@@ -12,151 +12,163 @@ import { FinishGameDto } from './dto/finish-game.dto';
 export class GameService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getActivityByCode(code: string) {
-    const activity = await this.prisma.activity.findUnique({
-      where: { code: code.toUpperCase() },
+  async getActivityByCode(codigo: string) {
+    const actividad = await this.prisma.actividad.findUnique({
+      where: { codigo: codigo.toUpperCase() },
       include: {
-        questions: {
-          orderBy: { order: 'asc' },
+        preguntas: {
+          orderBy: { orden: 'asc' },
           select: {
             id: true,
-            order: true,
-            answer: true,
-            example: true,
-            question: true,
-            hint: true,
+            orden: true,
+            respuesta: true,
+            ejemplo: true,
+            pregunta: true,
+            pista: true,
           },
         },
-        teacher: {
-          select: { name: true },
+        profesor: {
+          select: { nombre: true },
         },
       },
     });
 
-    if (!activity) {
-      throw new NotFoundException('Activity not found');
+    if (!actividad) {
+      throw new NotFoundException('Actividad no encontrada');
     }
 
-    if (!activity.isActive) {
-      throw new BadRequestException('This activity is not active');
+    if (!actividad.activa) {
+      throw new BadRequestException('Esta actividad no está activa');
     }
 
     return {
-      id: activity.id,
-      code: activity.code,
-      title: activity.title,
-      description: activity.description,
-      timeLimit: activity.timeLimit,
-      teacherName: activity.teacher.name,
-      questions: activity.questions,
+      id: actividad.id,
+      code: actividad.codigo,
+      title: actividad.titulo,
+      description: actividad.descripcion,
+      timeLimit: actividad.tiempoLimite,
+      teacherName: actividad.profesor.nombre,
+      questions: actividad.preguntas.map((p) => ({
+        id: p.id,
+        order: p.orden,
+        answer: p.respuesta,
+        example: p.ejemplo,
+        question: p.pregunta,
+        hint: p.pista,
+      })),
     };
   }
 
-  async startGame(code: string, dto: StartGameDto) {
-    const activity = await this.prisma.activity.findUnique({
-      where: { code: code.toUpperCase() },
+  async startGame(codigo: string, dto: StartGameDto) {
+    const actividad = await this.prisma.actividad.findUnique({
+      where: { codigo: codigo.toUpperCase() },
       include: {
-        questions: true,
+        preguntas: true,
       },
     });
 
-    if (!activity) {
-      throw new NotFoundException('Activity not found');
+    if (!actividad) {
+      throw new NotFoundException('Actividad no encontrada');
     }
 
-    if (!activity.isActive) {
-      throw new BadRequestException('This activity is not active');
+    if (!actividad.activa) {
+      throw new BadRequestException('Esta actividad no está activa');
     }
 
-    const session = await this.prisma.gameSession.create({
+    const sesion = await this.prisma.sesionJuego.create({
       data: {
-        studentName: dto.studentName,
-        totalQuestions: activity.questions.length,
-        activityId: activity.id,
+        nombreAlumno: dto.studentName,
+        totalPreguntas: actividad.preguntas.length,
+        actividadId: actividad.id,
       },
     });
 
     return {
-      sessionId: session.id,
-      startedAt: session.startedAt,
+      sessionId: sesion.id,
+      startedAt: sesion.iniciadoEn,
     };
   }
 
-  async submitAnswer(sessionId: string, dto: SubmitAnswerDto) {
-    const session = await this.prisma.gameSession.findUnique({
-      where: { id: sessionId },
+  async submitAnswer(sesionId: string, dto: SubmitAnswerDto) {
+    const sesion = await this.prisma.sesionJuego.findUnique({
+      where: { id: sesionId },
     });
 
-    if (!session) {
-      throw new NotFoundException('Game session not found');
+    if (!sesion) {
+      throw new NotFoundException('Sesión de juego no encontrada');
     }
 
-    if (session.finishedAt) {
-      throw new BadRequestException('Game session already finished');
+    if (sesion.finalizadoEn) {
+      throw new BadRequestException('La sesión de juego ya finalizó');
     }
 
-    const existingAnswer = await this.prisma.studentAnswer.findFirst({
+    const respuestaExistente = await this.prisma.respuestaAlumno.findFirst({
       where: {
-        sessionId,
-        questionOrder: dto.questionOrder,
+        sesionId,
+        ordenPregunta: dto.questionOrder,
       },
     });
 
-    if (existingAnswer) {
+    if (respuestaExistente) {
       throw new BadRequestException(
-        'Answer already submitted for this question',
+        'Ya se envió una respuesta para esta pregunta',
       );
     }
 
-    const answer = await this.prisma.studentAnswer.create({
+    const respuesta = await this.prisma.respuestaAlumno.create({
       data: {
-        questionOrder: dto.questionOrder,
-        correct: dto.correct,
-        timeToAnswer: dto.timeToAnswer,
-        sessionId,
-      },
-    });
-
-    return answer;
-  }
-
-  async finishGame(sessionId: string, dto: FinishGameDto) {
-    const session = await this.prisma.gameSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        answers: true,
-      },
-    });
-
-    if (!session) {
-      throw new NotFoundException('Game session not found');
-    }
-
-    if (session.finishedAt) {
-      throw new BadRequestException('Game session already finished');
-    }
-
-    const correctAnswers = session.answers.filter((a) => a.correct).length;
-
-    const updatedSession = await this.prisma.gameSession.update({
-      where: { id: sessionId },
-      data: {
-        finishedAt: new Date(),
-        timeUsed: dto.timeUsed,
-        score: correctAnswers,
+        ordenPregunta: dto.questionOrder,
+        correcta: dto.correct,
+        tiempoRespuesta: dto.timeToAnswer,
+        sesionId,
       },
     });
 
     return {
-      id: updatedSession.id,
-      studentName: updatedSession.studentName,
-      score: correctAnswers,
-      totalQuestions: updatedSession.totalQuestions,
+      id: respuesta.id,
+      questionOrder: respuesta.ordenPregunta,
+      correct: respuesta.correcta,
+      timeToAnswer: respuesta.tiempoRespuesta,
+    };
+  }
+
+  async finishGame(sesionId: string, dto: FinishGameDto) {
+    const sesion = await this.prisma.sesionJuego.findUnique({
+      where: { id: sesionId },
+      include: {
+        respuestas: true,
+      },
+    });
+
+    if (!sesion) {
+      throw new NotFoundException('Sesión de juego no encontrada');
+    }
+
+    if (sesion.finalizadoEn) {
+      throw new BadRequestException('La sesión de juego ya finalizó');
+    }
+
+    const respuestasCorrectas = sesion.respuestas.filter((r) => r.correcta).length;
+
+    const sesionActualizada = await this.prisma.sesionJuego.update({
+      where: { id: sesionId },
+      data: {
+        finalizadoEn: new Date(),
+        tiempoUsado: dto.timeUsed,
+        puntaje: respuestasCorrectas,
+      },
+    });
+
+    return {
+      id: sesionActualizada.id,
+      studentName: sesionActualizada.nombreAlumno,
+      score: respuestasCorrectas,
+      totalQuestions: sesionActualizada.totalPreguntas,
       percentage: Math.round(
-        (correctAnswers / updatedSession.totalQuestions) * 100,
+        (respuestasCorrectas / sesionActualizada.totalPreguntas) * 100,
       ),
-      timeUsed: updatedSession.timeUsed,
-      finishedAt: updatedSession.finishedAt,
+      timeUsed: sesionActualizada.tiempoUsado,
+      finishedAt: sesionActualizada.finalizadoEn,
     };
   }
 }

@@ -25,129 +25,184 @@ export class ActivitiesService {
     return code;
   }
 
-  async create(teacherId: string, dto: CreateActivityDto) {
-    let code: string;
-    let isUnique = false;
+  async create(profesorId: string, dto: CreateActivityDto) {
+    let codigo: string;
+    let esUnico = false;
 
-    while (!isUnique) {
-      code = this.generateCode();
-      const existing = await this.prisma.activity.findUnique({
-        where: { code },
+    while (!esUnico) {
+      codigo = this.generateCode();
+      const existente = await this.prisma.actividad.findUnique({
+        where: { codigo },
       });
-      if (!existing) isUnique = true;
+      if (!existente) esUnico = true;
     }
 
-    return this.prisma.activity.create({
+    const actividad = await this.prisma.actividad.create({
       data: {
-        code: code!,
-        title: dto.title,
-        description: dto.description,
-        timeLimit: dto.timeLimit ?? 600,
-        teacherId,
-        questions: {
+        codigo: codigo!,
+        titulo: dto.title,
+        descripcion: dto.description,
+        tiempoLimite: dto.timeLimit ?? 600,
+        profesorId,
+        preguntas: {
           create: dto.questions.map((q) => ({
-            order: q.order,
-            answer: q.answer.toUpperCase(),
-            example: q.example,
-            question: q.question,
-            hint: q.hint,
+            orden: q.order,
+            respuesta: q.answer.toUpperCase(),
+            ejemplo: q.example,
+            pregunta: q.question,
+            pista: q.hint,
           })),
         },
       },
       include: {
-        questions: {
-          orderBy: { order: 'asc' },
+        preguntas: {
+          orderBy: { orden: 'asc' },
         },
       },
     });
+
+    return this.mapActivityToResponse(actividad);
   }
 
-  async findAllByTeacher(teacherId: string) {
-    return this.prisma.activity.findMany({
-      where: { teacherId },
+  async findAllByTeacher(profesorId: string) {
+    const actividades = await this.prisma.actividad.findMany({
+      where: { profesorId },
       include: {
         _count: {
           select: {
-            questions: true,
-            gameSessions: true,
+            preguntas: true,
+            sesionesJuego: true,
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { creadoEn: 'desc' },
     });
-  }
 
-  async findById(id: string, teacherId?: string) {
-    const activity = await this.prisma.activity.findUnique({
-      where: { id },
-      include: {
-        questions: {
-          orderBy: { order: 'asc' },
-        },
-        teacher: {
-          select: { id: true, name: true },
-        },
+    return actividades.map((a) => ({
+      id: a.id,
+      code: a.codigo,
+      title: a.titulo,
+      description: a.descripcion,
+      timeLimit: a.tiempoLimite,
+      isActive: a.activa,
+      createdAt: a.creadoEn,
+      _count: {
+        questions: a._count.preguntas,
+        gameSessions: a._count.sesionesJuego,
       },
-    });
-
-    if (!activity) {
-      throw new NotFoundException('Activity not found');
-    }
-
-    if (teacherId && activity.teacherId !== teacherId) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    return activity;
-  }
-
-  async update(id: string, teacherId: string, dto: UpdateActivityDto) {
-    await this.findById(id, teacherId);
-
-    return this.prisma.activity.update({
-      where: { id },
-      data: dto,
-      include: {
-        questions: {
-          orderBy: { order: 'asc' },
-        },
-      },
-    });
-  }
-
-  async delete(id: string, teacherId: string) {
-    await this.findById(id, teacherId);
-
-    await this.prisma.activity.delete({
-      where: { id },
-    });
-
-    return { message: 'Activity deleted successfully' };
-  }
-
-  async getResults(id: string, teacherId: string) {
-    await this.findById(id, teacherId);
-
-    const sessions = await this.prisma.gameSession.findMany({
-      where: { activityId: id },
-      include: {
-        answers: {
-          orderBy: { questionOrder: 'asc' },
-        },
-      },
-      orderBy: { startedAt: 'desc' },
-    });
-
-    return sessions.map((session) => ({
-      id: session.id,
-      studentName: session.studentName,
-      startedAt: session.startedAt,
-      finishedAt: session.finishedAt,
-      timeUsed: session.timeUsed,
-      score: session.score,
-      totalQuestions: session.totalQuestions,
-      percentage: Math.round((session.score / session.totalQuestions) * 100),
-      answers: session.answers,
     }));
+  }
+
+  async findById(id: string, profesorId?: string) {
+    const actividad = await this.prisma.actividad.findUnique({
+      where: { id },
+      include: {
+        preguntas: {
+          orderBy: { orden: 'asc' },
+        },
+        profesor: {
+          select: { id: true, nombre: true },
+        },
+      },
+    });
+
+    if (!actividad) {
+      throw new NotFoundException('Actividad no encontrada');
+    }
+
+    if (profesorId && actividad.profesorId !== profesorId) {
+      throw new ForbiddenException('Acceso denegado');
+    }
+
+    return this.mapActivityToResponse(actividad);
+  }
+
+  async update(id: string, profesorId: string, dto: UpdateActivityDto) {
+    await this.findById(id, profesorId);
+
+    const actividad = await this.prisma.actividad.update({
+      where: { id },
+      data: {
+        titulo: dto.title,
+        descripcion: dto.description,
+        tiempoLimite: dto.timeLimit,
+        activa: dto.isActive,
+      },
+      include: {
+        preguntas: {
+          orderBy: { orden: 'asc' },
+        },
+      },
+    });
+
+    return this.mapActivityToResponse(actividad);
+  }
+
+  async delete(id: string, profesorId: string) {
+    await this.findById(id, profesorId);
+
+    await this.prisma.actividad.delete({
+      where: { id },
+    });
+
+    return { message: 'Actividad eliminada correctamente' };
+  }
+
+  async getResults(id: string, profesorId: string) {
+    await this.findById(id, profesorId);
+
+    const sesiones = await this.prisma.sesionJuego.findMany({
+      where: { actividadId: id },
+      include: {
+        respuestas: {
+          orderBy: { ordenPregunta: 'asc' },
+        },
+      },
+      orderBy: { iniciadoEn: 'desc' },
+    });
+
+    return sesiones.map((sesion) => ({
+      id: sesion.id,
+      studentName: sesion.nombreAlumno,
+      startedAt: sesion.iniciadoEn,
+      finishedAt: sesion.finalizadoEn,
+      timeUsed: sesion.tiempoUsado,
+      score: sesion.puntaje,
+      totalQuestions: sesion.totalPreguntas,
+      percentage: Math.round((sesion.puntaje / sesion.totalPreguntas) * 100),
+      answers: sesion.respuestas.map((r) => ({
+        id: r.id,
+        questionOrder: r.ordenPregunta,
+        correct: r.correcta,
+        timeToAnswer: r.tiempoRespuesta,
+      })),
+    }));
+  }
+
+  private mapActivityToResponse(actividad: any) {
+    return {
+      id: actividad.id,
+      code: actividad.codigo,
+      title: actividad.titulo,
+      description: actividad.descripcion,
+      timeLimit: actividad.tiempoLimite,
+      isActive: actividad.activa,
+      createdAt: actividad.creadoEn,
+      updatedAt: actividad.actualizadoEn,
+      questions: actividad.preguntas?.map((p: any) => ({
+        id: p.id,
+        order: p.orden,
+        answer: p.respuesta,
+        example: p.ejemplo,
+        question: p.pregunta,
+        hint: p.pista,
+      })),
+      teacher: actividad.profesor
+        ? {
+            id: actividad.profesor.id,
+            name: actividad.profesor.nombre,
+          }
+        : undefined,
+    };
   }
 }

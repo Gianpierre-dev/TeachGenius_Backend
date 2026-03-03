@@ -7,68 +7,74 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Teacher {
-  id         String     @id @default(cuid())
-  email      String     @unique
-  password   String
-  name       String
-  createdAt  DateTime   @default(now())
-  activities Activity[]
+model Profesor {
+  id          String      @id @default(cuid())
+  email       String      @unique
+  contrasena  String
+  nombre      String
+  creadoEn    DateTime    @default(now()) @map("creado_en")
+  actividades Actividad[]
+
+  @@map("profesores")
 }
 
-model Activity {
-  id           String        @id @default(cuid())
-  code         String        @unique
-  title        String
-  description  String?
-  timeLimit    Int           @default(600)
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  teacherId    String
-  teacher      Teacher       @relation(fields: [teacherId], references: [id])
-  questions    Question[]
-  gameSessions GameSession[]
+model Actividad {
+  id            String        @id @default(cuid())
+  codigo        String        @unique
+  titulo        String
+  descripcion   String?
+  tiempoLimite  Int           @default(600) @map("tiempo_limite")
+  activa        Boolean       @default(true)
+  creadoEn      DateTime      @default(now()) @map("creado_en")
+  actualizadoEn DateTime      @updatedAt @map("actualizado_en")
+  profesorId    String        @map("profesor_id")
+  profesor      Profesor      @relation(fields: [profesorId], references: [id])
+  preguntas     Pregunta[]
+  sesionesJuego SesionJuego[]
 
-  @@index([teacherId])
-  @@index([code])
+  @@index([profesorId])
+  @@index([codigo])
+  @@map("actividades")
 }
 
-model Question {
-  id         String   @id @default(cuid())
-  order      Int
-  answer     String
-  example    String
-  question   String
-  hint       String?
-  activityId String
-  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+model Pregunta {
+  id          String    @id @default(cuid())
+  orden       Int
+  respuesta   String
+  ejemplo     String
+  pregunta    String
+  pista       String?
+  actividadId String    @map("actividad_id")
+  actividad   Actividad @relation(fields: [actividadId], references: [id], onDelete: Cascade)
 
-  @@index([activityId])
+  @@index([actividadId])
+  @@map("preguntas")
 }
 
-model GameSession {
-  id             String          @id @default(cuid())
-  studentName    String
-  startedAt      DateTime        @default(now())
-  finishedAt     DateTime?
-  timeUsed       Int?
-  score          Int             @default(0)
-  totalQuestions Int
-  activityId     String
-  activity       Activity        @relation(fields: [activityId], references: [id])
-  answers        StudentAnswer[]
+model SesionJuego {
+  id              String            @id @default(cuid())
+  nombreAlumno    String            @map("nombre_alumno")
+  iniciadoEn      DateTime          @default(now()) @map("iniciado_en")
+  finalizadoEn    DateTime?         @map("finalizado_en")
+  tiempoUsado     Int?              @map("tiempo_usado")
+  puntaje         Int               @default(0)
+  totalPreguntas  Int               @map("total_preguntas")
+  actividadId     String            @map("actividad_id")
+  actividad       Actividad         @relation(fields: [actividadId], references: [id])
+  respuestas      RespuestaAlumno[]
 
-  @@index([activityId])
+  @@index([actividadId])
+  @@map("sesiones_juego")
 }
 
-model StudentAnswer {
+model RespuestaAlumno {
   id            String      @id @default(cuid())
-  questionOrder Int
-  correct       Boolean
-  timeToAnswer  Int?
-  sessionId     String
-  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ordenPregunta Int         @map("orden_pregunta")
+  correcta      Boolean
+  tiempoRespuesta Int?      @map("tiempo_respuesta")
+  sesionId      String      @map("sesion_id")
+  sesion        SesionJuego @relation(fields: [sesionId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId])
+  @@index([sesionId])
+  @@map("respuestas_alumnos")
 }

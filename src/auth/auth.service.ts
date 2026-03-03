@@ -17,79 +17,79 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existingTeacher = await this.prisma.teacher.findUnique({
+    const profesorExistente = await this.prisma.profesor.findUnique({
       where: { email: dto.email },
     });
 
-    if (existingTeacher) {
-      throw new ConflictException('Email already registered');
+    if (profesorExistente) {
+      throw new ConflictException('Email ya registrado');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const contrasenaHash = await bcrypt.hash(dto.password, 10);
 
-    const teacher = await this.prisma.teacher.create({
+    const profesor = await this.prisma.profesor.create({
       data: {
         email: dto.email,
-        password: hashedPassword,
-        name: dto.name,
+        contrasena: contrasenaHash,
+        nombre: dto.name,
       },
     });
 
-    const token = this.generateToken(teacher.id);
+    const token = this.generateToken(profesor.id);
 
     return {
       token,
       teacher: {
-        id: teacher.id,
-        email: teacher.email,
-        name: teacher.name,
+        id: profesor.id,
+        email: profesor.email,
+        name: profesor.nombre,
       },
     };
   }
 
   async login(dto: LoginDto) {
-    const teacher = await this.prisma.teacher.findUnique({
+    const profesor = await this.prisma.profesor.findUnique({
       where: { email: dto.email },
     });
 
-    if (!teacher) {
-      throw new UnauthorizedException('Invalid credentials');
+    if (!profesor) {
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const isPasswordValid = await bcrypt.compare(
+    const contrasenaValida = await bcrypt.compare(
       dto.password,
-      teacher.password,
+      profesor.contrasena,
     );
 
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+    if (!contrasenaValida) {
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const token = this.generateToken(teacher.id);
+    const token = this.generateToken(profesor.id);
 
     return {
       token,
       teacher: {
-        id: teacher.id,
-        email: teacher.email,
-        name: teacher.name,
+        id: profesor.id,
+        email: profesor.email,
+        name: profesor.nombre,
       },
     };
   }
 
   async validateTeacher(id: string) {
-    const teacher = await this.prisma.teacher.findUnique({
+    const profesor = await this.prisma.profesor.findUnique({
       where: { id },
     });
 
-    if (!teacher) {
-      throw new UnauthorizedException('Teacher not found');
+    if (!profesor) {
+      throw new UnauthorizedException('Profesor no encontrado');
     }
 
-    return teacher;
+    return profesor;
   }
 
-  private generateToken(teacherId: string): string {
-    return this.jwtService.sign({ sub: teacherId });
+  private generateToken(profesorId: string): string {
+    return this.jwtService.sign({ sub: profesorId });
   }
 }
